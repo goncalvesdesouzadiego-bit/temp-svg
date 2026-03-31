@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Vera Solutions – Scroll Line Animation Mockup</title>
+<title>Vera Solutions – Scroll Line Animation</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body { background: #1a1a2e; overflow-x: hidden; }
@@ -62,10 +62,9 @@
     animation: spin 0.8s linear infinite;
     margin-bottom: 20px;
   }
-
   @keyframes spin { to { transform: rotate(360deg); } }
 
-  /* Progress bar */
+  /* Progress */
   .scroll-progress {
     position: fixed; top: 0; left: 0;
     height: 3px;
@@ -95,46 +94,28 @@
   /* Debug (press D) */
   .debug-panel {
     position: fixed; top: 10px; right: 10px;
-    background: rgba(0,0,0,0.85);
+    background: rgba(0,0,0,0.9);
     color: #0f0;
-    font-family: monospace; font-size: 11px;
-    padding: 10px 14px; border-radius: 8px;
-    z-index: 200; display: none; line-height: 1.6;
+    font-family: monospace; font-size: 12px;
+    padding: 12px 16px; border-radius: 8px;
+    z-index: 200; display: none; line-height: 1.8;
+    min-width: 260px;
   }
   .debug-panel.visible { display: block; }
-
-  /* Error */
-  .error-overlay {
-    position: fixed; inset: 0;
-    background: #1a1a2e;
-    color: white;
-    display: none; flex-direction: column;
-    align-items: center; justify-content: center;
-    z-index: 1001;
-    font-family: 'Segoe UI', sans-serif;
-  }
-  .error-overlay.visible { display: flex; }
-  .error-overlay h2 { font-size: 22px; font-weight: 300; margin-bottom: 12px; }
-  .error-overlay p { font-size: 13px; opacity: 0.6; max-width: 500px; text-align: center; line-height: 1.7; }
 </style>
 </head>
 <body>
 
 <div class="loading-overlay" id="loading">
   <div class="loading-spinner"></div>
-  <h2>Carregando mockup...</h2>
-  <p>Preparando a animação da linha</p>
-</div>
-
-<div class="error-overlay" id="errorOverlay">
-  <h2>Erro ao carregar</h2>
-  <p id="errorMsg"></p>
+  <h2>Carregando...</h2>
+  <p>Preparando a animação</p>
 </div>
 
 <div class="scroll-progress" id="progress"></div>
 
 <div class="instructions" id="instructions">
-  <span class="accent">↓</span> Role para baixo para animar a linha <span class="accent">↓</span>
+  <span class="accent">↓</span> Role para baixo para ver a linha se desenhar <span class="accent">↓</span>
 </div>
 
 <div class="debug-panel" id="debug"></div>
@@ -142,7 +123,7 @@
 <div class="page-wrapper" id="pageWrapper">
   <div class="page-container" id="pageContainer">
     <div class="page-bg">
-      <img src="Home.png" alt="Vera Solutions Homepage" id="bgImage" />
+      <img src="Home.png" alt="Vera Solutions Homepage" />
     </div>
     <div class="line-overlay" id="lineOverlay"></div>
   </div>
@@ -150,35 +131,34 @@
 
 <script>
 (async function() {
-  const loading = document.getElementById('loading');
-  const errorOverlay = document.getElementById('errorOverlay');
-  const errorMsg = document.getElementById('errorMsg');
-  const progressBar = document.getElementById('progress');
-  const instructionsEl = document.getElementById('instructions');
-  const overlay = document.getElementById('lineOverlay');
-  const debugPanel = document.getElementById('debug');
-  const pageContainer = document.getElementById('pageContainer');
-  const pageWrapper = document.getElementById('pageWrapper');
+  const $ = id => document.getElementById(id);
+  const loading = $('loading');
+  const progressBar = $('progress');
+  const instructionsEl = $('instructions');
+  const overlay = $('lineOverlay');
+  const debugPanel = $('debug');
+  const pageContainer = $('pageContainer');
+  const pageWrapper = $('pageWrapper');
 
-  // --- SCALE TO VIEWPORT ---
+  // --- CONSTANTS ---
   const SVG_WIDTH = 1920;
   const SVG_HEIGHT = 9759.58;
 
+  // --- SCALE PAGE TO FIT VIEWPORT WIDTH ---
   function scaleToFit() {
     const vw = window.innerWidth;
     const scale = vw / SVG_WIDTH;
-    pageContainer.style.transform = `scale(${scale})`;
+    pageContainer.style.transform = 'scale(' + scale + ')';
     pageContainer.style.height = SVG_HEIGHT + 'px';
     pageWrapper.style.height = (SVG_HEIGHT * scale) + 'px';
     return scale;
   }
-
   let currentScale = scaleToFit();
-  window.addEventListener('resize', () => { currentScale = scaleToFit(); });
+  window.addEventListener('resize', function() { currentScale = scaleToFit(); });
 
-  // --- DEBUG ---
+  // --- DEBUG TOGGLE ---
   let debugVisible = false;
-  document.addEventListener('keydown', (e) => {
+  document.addEventListener('keydown', function(e) {
     if (e.key === 'd' || e.key === 'D') {
       debugVisible = !debugVisible;
       debugPanel.classList.toggle('visible', debugVisible);
@@ -187,121 +167,148 @@
 
   // --- LOAD SVG ---
   try {
-    const response = await fetch('Line 2.svg');
-    if (!response.ok) throw new Error(`HTTP ${response.status} — verifique se "Line 2.svg" está no mesmo diretório.`);
-    const svgText = await response.text();
-
-    overlay.innerHTML = svgText;
-    const svg = overlay.querySelector('svg');
-    if (!svg) throw new Error('Nenhum elemento <svg> encontrado no arquivo.');
-
-    // Fill container
-    svg.style.width = '100%';
-    svg.style.height = '100%';
-    svg.removeAttribute('width');
-    svg.removeAttribute('height');
-
-    // Parse viewBox
-    const viewBox = svg.getAttribute('viewBox');
-    if (!viewBox) throw new Error('SVG não tem viewBox.');
-    const vbParts = viewBox.split(/[\s,]+/).map(Number);
-    const vbX = vbParts[0], vbY = vbParts[1];
-    const vbWidth = vbParts[2], vbHeight = vbParts[3];
-
-    // --- CLIP-PATH REVEAL ---
-    // Create a clipPath that reveals from top to bottom
-    // This preserves ALL original styles (dotted, dashed, colors, etc.)
-    const ns = 'http://www.w3.org/2000/svg';
-
-    // Check if SVG already has a <defs>, reuse it
-    let defs = svg.querySelector('defs');
-    if (!defs) {
-      defs = document.createElementNS(ns, 'defs');
-      svg.insertBefore(defs, svg.firstChild);
-    }
-
-    const clipPath = document.createElementNS(ns, 'clipPath');
-    clipPath.setAttribute('id', 'scroll-clip');
-
-    const clipRect = document.createElementNS(ns, 'rect');
-    clipRect.setAttribute('x', vbX - 10);
-    clipRect.setAttribute('y', vbY);
-    clipRect.setAttribute('width', vbWidth + 20);
-    clipRect.setAttribute('height', '0');
-    clipPath.appendChild(clipRect);
-    defs.appendChild(clipPath);
-
-    // Wrap all content (except defs) in a clipped group
-    const group = document.createElementNS(ns, 'g');
-    group.setAttribute('clip-path', 'url(#scroll-clip)');
-
-    const children = Array.from(svg.children).filter(c => c !== defs);
-    children.forEach(child => group.appendChild(child));
-    svg.appendChild(group);
-
-    // --- READY ---
-    loading.classList.add('hidden');
-    setTimeout(() => loading.style.display = 'none', 600);
-    instructionsEl.classList.add('visible');
-
-    let hasScrolled = false;
-
-    function onScroll() {
-      const scrollTop = window.scrollY;
-      const windowHeight = window.innerHeight;
-      const pageHeight = parseFloat(pageWrapper.style.height);
-      const docHeight = Math.max(pageHeight - windowHeight, 1);
-      const scrollPercent = Math.min(scrollTop / docHeight, 1);
-
-      // Progress bar
-      progressBar.style.width = (scrollPercent * 100) + '%';
-
-      // Hide instructions
-      if (!hasScrolled && scrollTop > 100) {
-        hasScrolled = true;
-        instructionsEl.classList.remove('visible');
-      }
-
-      // Viewport bottom as fraction of total page
-      const viewportBottomFraction = Math.min((scrollTop + windowHeight) / pageHeight, 1);
-
-      // Reveal SVG up to viewport position
-      const revealHeight = viewportBottomFraction * vbHeight;
-      clipRect.setAttribute('height', revealHeight);
-
-      // Debug
-      if (debugVisible) {
-        debugPanel.innerHTML = [
-          `scroll: ${scrollTop.toFixed(0)}px`,
-          `progress: ${(scrollPercent * 100).toFixed(1)}%`,
-          `reveal: ${(viewportBottomFraction * 100).toFixed(1)}%`,
-          `clipH: ${revealHeight.toFixed(0)} / ${vbHeight.toFixed(0)}`,
-          `scale: ${currentScale.toFixed(3)}`
-        ].join('<br>');
-      }
-    }
-
-    let ticking = false;
-    window.addEventListener('scroll', () => {
-      if (!ticking) {
-        requestAnimationFrame(() => { onScroll(); ticking = false; });
-        ticking = true;
-      }
-    });
-    window.addEventListener('resize', () => {
-      if (!ticking) {
-        requestAnimationFrame(() => { onScroll(); ticking = false; });
-        ticking = true;
-      }
-    });
-
-    onScroll();
-
-  } catch (error) {
-    loading.style.display = 'none';
-    errorMsg.innerHTML = `${error.message}<br><br><span style="opacity:0.4;font-size:11px;">Dica: se estiver abrindo direto do disco (file://), abra via servidor web ou GitHub Pages.</span>`;
-    errorOverlay.classList.add('visible');
+    var resp = await fetch('Line 2.svg');
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    var svgText = await resp.text();
+  } catch(err) {
+    loading.innerHTML = '<h2 style="margin-bottom:12px;">Erro ao carregar SVG</h2>' +
+      '<p style="opacity:0.6;font-size:14px;max-width:500px;text-align:center;line-height:1.7;">' +
+      'Verifique se <strong style="color:#f5a623;">Line 2.svg</strong> está no mesmo diretório.<br><br>' +
+      '<span style="opacity:0.4;font-size:11px;">' + err.message + '</span></p>';
+    return;
   }
+
+  overlay.innerHTML = svgText;
+  var svg = overlay.querySelector('svg');
+  if (!svg) {
+    loading.innerHTML = '<h2>SVG inválido</h2>';
+    return;
+  }
+
+  // Make SVG fill container
+  svg.style.width = '100%';
+  svg.style.height = '100%';
+  svg.removeAttribute('width');
+  svg.removeAttribute('height');
+
+  // Parse viewBox
+  var viewBox = svg.getAttribute('viewBox');
+  if (!viewBox) { loading.innerHTML = '<h2>SVG sem viewBox</h2>'; return; }
+  var vb = viewBox.split(/[\s,]+/).map(Number);
+  var vbX = vb[0], vbY = vb[1], vbWidth = vb[2], vbHeight = vb[3];
+
+  // --- CREATE CLIP PATH ---
+  // This clipPath reveals the line from top to bottom as user scrolls.
+  // It preserves ALL original SVG styles (dotted lines, colors, etc.)
+  var ns = 'http://www.w3.org/2000/svg';
+
+  var defs = svg.querySelector('defs');
+  if (!defs) {
+    defs = document.createElementNS(ns, 'defs');
+    svg.insertBefore(defs, svg.firstChild);
+  }
+
+  var clipEl = document.createElementNS(ns, 'clipPath');
+  clipEl.setAttribute('id', 'reveal');
+
+  var clipRect = document.createElementNS(ns, 'rect');
+  clipRect.setAttribute('x', String(vbX - 50));
+  clipRect.setAttribute('y', String(vbY));
+  clipRect.setAttribute('width', String(vbWidth + 100));
+  // CRITICAL: start with height 0 so nothing is visible
+  clipRect.setAttribute('height', '0');
+
+  clipEl.appendChild(clipRect);
+  defs.appendChild(clipEl);
+
+  // Wrap all SVG content in a group with the clipPath
+  var g = document.createElementNS(ns, 'g');
+  g.setAttribute('clip-path', 'url(#reveal)');
+  var kids = [];
+  for (var i = 0; i < svg.children.length; i++) {
+    if (svg.children[i] !== defs) kids.push(svg.children[i]);
+  }
+  kids.forEach(function(child) { g.appendChild(child); });
+  svg.appendChild(g);
+
+  // --- READY ---
+  loading.classList.add('hidden');
+  setTimeout(function() { loading.style.display = 'none'; }, 600);
+  instructionsEl.classList.add('visible');
+
+  var hasScrolled = false;
+
+  // --- SCROLL HANDLER ---
+  function onScroll() {
+    var scrollTop = window.scrollY;
+    var windowHeight = window.innerHeight;
+    var pageHeight = SVG_HEIGHT * currentScale;
+    var docHeight = pageHeight - windowHeight;
+    if (docHeight < 1) docHeight = 1;
+
+    var scrollPercent = Math.min(scrollTop / docHeight, 1);
+
+    // Progress bar
+    progressBar.style.width = (scrollPercent * 100) + '%';
+
+    // Hide instructions after first scroll
+    if (!hasScrolled && scrollTop > 80) {
+      hasScrolled = true;
+      instructionsEl.classList.remove('visible');
+    }
+
+    // KEY CALCULATION:
+    // We want to reveal the line up to where the user's viewport currently is.
+    // Using the SCROLL TOP position (not bottom) gives the effect that
+    // the line is drawn UP TO where the user has scrolled.
+    // Adding a portion of the window height so the reveal is slightly
+    // ahead of the top edge (feels more natural — line draws to ~middle of screen).
+    var revealPointPx = scrollTop + (windowHeight * 0.6);
+    var revealFraction = Math.min(revealPointPx / pageHeight, 1);
+    var revealSvgHeight = revealFraction * vbHeight;
+
+    // Update the clip rect
+    clipRect.setAttribute('height', String(revealSvgHeight));
+
+    // Debug
+    if (debugVisible) {
+      debugPanel.innerHTML =
+        'scrollTop: ' + scrollTop.toFixed(0) + 'px\n' +
+        'windowH: ' + windowHeight + 'px\n' +
+        'pageH: ' + pageHeight.toFixed(0) + 'px\n' +
+        'scale: ' + currentScale.toFixed(3) + '\n' +
+        'scrollPct: ' + (scrollPercent * 100).toFixed(1) + '%\n' +
+        'revealPt: ' + revealPointPx.toFixed(0) + 'px\n' +
+        'revealFrac: ' + (revealFraction * 100).toFixed(1) + '%\n' +
+        'clipH: ' + revealSvgHeight.toFixed(0) + ' / ' + vbHeight.toFixed(0);
+      debugPanel.innerHTML = debugPanel.innerHTML.replace(/\n/g, '<br>');
+    }
+  }
+
+  // Use requestAnimationFrame for smooth 60fps updates
+  var ticking = false;
+  window.addEventListener('scroll', function() {
+    if (!ticking) {
+      requestAnimationFrame(function() { onScroll(); ticking = false; });
+      ticking = true;
+    }
+  });
+
+  window.addEventListener('resize', function() {
+    requestAnimationFrame(onScroll);
+  });
+
+  // CRITICAL: Ensure we start from scroll position 0
+  // and only then do the initial calculation
+  window.scrollTo(0, 0);
+
+  // Wait one frame before first calculation so the browser has rendered
+  requestAnimationFrame(function() {
+    requestAnimationFrame(function() {
+      onScroll();
+    });
+  });
+
 })();
 </script>
 
